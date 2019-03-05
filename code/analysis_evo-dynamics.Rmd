@@ -48,7 +48,7 @@ knitr::opts_chunk$set(fig.width=7.5, fig.height=4,
 
 ```{r convert-matrix}
 # Read in the Breadth of Resistance Data
-bor <- read.csv("./data/inf-mat.csv", header = F)
+bor <- read.csv("../data/inf-mat.csv", header = F)
 
 # prevent factors
 dat <- apply(bor, 2, function(x) as.character(x))
@@ -123,7 +123,7 @@ res4$B.tm.pt <- gsub(" ","",as.character(res4$B.tm.pt))
 
 ```{r dof-function}
 # Use processed datafile for remaining analyses
-res4 <- read.csv("./data/inf-mat-processed.csv", header = T)
+res4 <- read.csv("../data/inf-mat-processed.csv", header = T)
 
 ```
 
@@ -346,99 +346,131 @@ colnames(bor.cstat) <- c("BcID","cID","phage.time","bac.time","inf.prob","trt","
 
 # Figure 2: global infectivity and resistance
 
-```{r resistance-fig}
-# calculate mean resistance for each chemostat, then for the treatment level
-resistance <- bor.cstat.Ncoevo %>% 
-  bind_rows(bor.cstat.Pcoevo) %>% 
-  mutate_if(is.character, as.factor) %>%
-  mutate(inf.prob.inv = 1- inf.prob) %>%
-  group_by(b.cid.list, bac.time) %>%
-  mutate(mean.cid.inf.prob = mean(inf.prob.inv)) %>%
-  group_by(lim, bac.time) %>%
-  summarize(mean.inf.prob = mean(mean.cid.inf.prob),
-            sd.inf.prob = sd(mean.cid.inf.prob)/sqrt(3))
+```{r}
+syn.bor <- read.csv("../data/syn-bor.csv", header = T)
+phage.bor <- read.csv("../data/phage-bor.csv", header = T)
 
-p <- ggplot(resistance, aes(x = bac.time, y = mean.inf.prob, 
-                       col = lim, shape = lim)) +
-  geom_vline(xintercept = 0, col = "grey40") +
-  geom_errorbar(aes(ymin = mean.inf.prob - sd.inf.prob,
-                    ymax = mean.inf.prob + sd.inf.prob), 
-                width = 0.1) +
-  geom_point(size = 3) + 
-  scale_colour_grey("Limitation") + 
-  scale_shape_discrete("Limitation") +
-  lims(x = c(-6,170), y = c(0,1)) +
-  theme_bw() + theme(panel.grid = element_blank()) +
-  labs(x = "Time (d)", y = "Resistance\n")
+tiff(filename = "../supporting-files/Figure2.tiff",
+    width = 7.5, height = 3, units = "in", pointsize = 8,
+    bg = "white", family = "sans", type = "cairo", res = 600)
+
+day.start = -6
+
+bn <- syn.bor[syn.bor$B.trt == "N",]
+bp <- syn.bor[syn.bor$B.trt == "P",]
+
+bor.tsmeansN <- aggregate(bn[,103:105],bn["B.daynumber"],function(x) mean(x))
+bor.tsmeansP <- aggregate(bp[,103:105],bp["B.daynumber"],function(x) mean(x))
+bor.tsSEMN <- aggregate(bn[,103:105],bn["B.daynumber"],sem)
+bor.tsSEMP <- aggregate(bp[,103:105],bp["B.daynumber"],sem)
+
+par(mfrow = c(1,2), mar = c(5,6,3,1)+0.1)
+
+# NL Syn
+plot(global ~ B.daynumber, data = bor.tsmeansN, 
+     xlim = c(-10,170),ylim = c(0,1), 
+     xaxt = 'n', yaxt = 'n',
+     xlab = "Time (days)",ylab = "Resistance", 
+     type = "n", font.lab = 2,
+     cex = 2, cex.lab = 1.5)
+axis(1, c(0,40,80,120,160),cex.axis = 1.25, font = 1)
+axis(2, c(0,0.5,1), cex.axis = 1.25, font = 1, las = 1)
+
+if(day.start <= 0){
+    abline(v = 0, lwd = 2, lty = 1, col = "black")
+    rect(day.start-12,-0.5,0,1.5, col = "grey94")
+  }
+
+box(lwd=3)
+arrows(bor.tsmeansN$B.daynumber, bor.tsmeansN$global-bor.tsSEMN$global,
+       bor.tsmeansN$B.daynumber, bor.tsmeansN$global+bor.tsSEMN$global,
+       code = 0, lwd = 3)
+arrows(bor.tsmeansP$B.daynumber, bor.tsmeansP$global-bor.tsSEMP$global,
+       bor.tsmeansP$B.daynumber, bor.tsmeansP$global+bor.tsSEMP$global,
+       code = 0, lwd = 3)
+
+points(global ~ B.daynumber, data = bor.tsmeansN, 
+     type = "p", pch = 21, 
+     col = "black", bg = "white",
+     lty = 1, lwd = 2, cex = 3)
+points(global ~ B.daynumber, data = bor.tsmeansP, 
+     type = "p", pch = 22, 
+     col = "black", bg = "white",
+     lty = 1, lwd = 2, cex = 3)
 
 
+#Phage
 
-```
+bn.p <- phage.bor[phage.bor$P.lim == "N",]
+bp.p <- phage.bor[phage.bor$P.lim == "P",]
 
-```{r infectivity-fig}
-infectivity <- bor.cstat.Ncoevo %>% 
-  bind_rows(bor.cstat.Pcoevo) %>% 
-  mutate_if(is.character, as.factor) %>%
-  group_by(cid.list, phage.time) %>%
-  mutate(mean.cid.inf.prob = mean(inf.prob)) %>%
-  group_by(lim, phage.time) %>%
-  summarize(mean.inf.prob = mean(mean.cid.inf.prob),
-            sd.inf.prob = sd(mean.cid.inf.prob)/sqrt(3))
+# bor.tsmeansN <- aggregate(bn[,123:125],bn["P.daynumber"],function(x) mean(x))
+# bor.tsmeansP <- aggregate(bp[,123:125],bp["P.daynumber"],function(x) mean(x))
+# bor.tsSEMN <- aggregate(bn[,123:125],bn["P.daynumber"],sem)
+# bor.tsSEMP <- aggregate(bp[,123:125],bp["P.daynumber"],sem)
 
-inf.p <- ggplot(infectivity, aes(x = phage.time, y = mean.inf.prob, 
-                       col = lim, shape = lim)) +
-    geom_vline(xintercept = 0, col = "grey40") +
-  geom_errorbar(aes(ymin = mean.inf.prob - sd.inf.prob,
-                    ymax = mean.inf.prob + sd.inf.prob), 
-                width = 0.1) +
-  geom_point(size = 3) + 
-  scale_colour_grey("Limitation") + 
-  scale_shape_discrete("Limitation") +
-  lims(x = c(-6,170), y = c(0,0.3)) +
-  theme_bw() + theme(panel.grid = element_blank()) +
-  labs(x = "Time (d)", y = "Infectivity\n", font = "bold")
+bor.tsmeansN <- aggregate(bn.p[,"global"],bn.p["P.daynumber"],function(x) mean(x))
+bor.tsmeansP <- aggregate(bp.p[,"global"],bp.p["P.daynumber"],function(x) mean(x))
+bor.tsSEMN <- aggregate(bn.p[,"global"],bn.p["P.daynumber"],sem)
+bor.tsSEMP <- aggregate(bp.p[,"global"],bp.p["P.daynumber"],sem)
 
-```
+par(mar = c(5,6,3,1)+0.1)
 
-```{r fig2, fig.cap=""}
-grid_arrange_shared_legend(p, inf.p ,ncol = 2)
+plot(x ~ P.daynumber, data = bor.tsmeansN, 
+     xlim = c(-10,170),ylim = c(0,.5), 
+     xaxt = 'n', yaxt = 'n',
+     xlab = "Time (days)",ylab = "Infectivity\n", 
+     type = "n", font.lab = 2,
+     cex = 2, cex.lab = 1.5)
+axis(1, c(0,40,80,120,160),cex.axis = 1.25, font = 1)
+axis(2, c(0,0.25,0.5), cex.axis = 1.25, font = 1, las = 1)
 
-# ggsave(grid_arrange_shared_legend(p, inf.p ,ncol = 2),
-#        filename = "./supporting-files/Figure2.tiff",
-#        device = "tiff", dpi = 300, width = 6, height = 3, units = "in",
-#        scale = 1.1)
+if(day.start <= 0){
+    abline(v = 0, lwd = 2, lty = 1, col = "black")
+    rect(day.start-12,-0.5,0,.75, col = "grey94")
+  }
+
+box(lwd=3)
+
+arrows(bor.tsmeansN$P.daynumber, bor.tsmeansN$x-bor.tsSEMN$x,
+       bor.tsmeansN$P.daynumber, bor.tsmeansN$x+bor.tsSEMN$x,
+       code = 0, lwd = 3)
+arrows(bor.tsmeansP$P.daynumber, bor.tsmeansP$x-bor.tsSEMP$x,
+       bor.tsmeansP$P.daynumber, bor.tsmeansP$x+bor.tsSEMP$x,
+       code = 0, lwd = 3)
+
+points(x ~ P.daynumber, data = bor.tsmeansN, 
+     type = "p", pch = 21, 
+     col = "black", bg = "white",
+     lty = 1, lwd = 2, cex = 3)
+points(x~ P.daynumber, data = bor.tsmeansP, 
+     type = "p", pch = 22, 
+     col = "black", bg = "white",
+     lty = 1, lwd = 2, cex = 3)
+
+legend("bottomright",c("N-limited", "P-limited"), pch = c(21,22), 
+       col = "black", bty='n', cex =1.5)
+
+dev.off()
 ```
 
 ```{r RMANOVA-inf-res}
+
 # resistance
-res.dat <- bor.cstat.Ncoevo %>% 
-  bind_rows(bor.cstat.Pcoevo) %>% 
-  mutate_if(is.character, as.factor) %>%
-  mutate(inf.prob.inv = 1- inf.prob)
-
-#ggplot(data = res.dat, aes(x = bac.time, y = inf.prob.inv, col = lim)) + geom_point()
-
-model.ar <- lme(inf.prob.inv ~ lim * bac.time, 
-                random = ~1 | b.cid.list,
-                correlation = corAR1(form = ~ 1 | b.cid.list),
-                data = res.dat)
-
-#summary(model.ar)
+model.ar <- lme(global ~ B.trt * as.factor(B.daynumber), 
+                random = ~1 | B.cID,
+                correlation = corAR1(form = ~ 1 | B.cID),
+                data = syn.bor)
 pander(anova.lme(model.ar, type = "marginal"), caption = "Resistance RMANOVA results")
 
+
 # infectivity
+model.ar <- lme(global ~ P.lim * as.factor(P.daynumber), 
+                random = ~1 | P.cID,
+                correlation = corAR1(form = ~ 1 | P.cID),
+                data = phage.bor)
+pander(anova.lme(model.ar, type = "marginal"), caption = "infectivity RMANOVA results")
 
-inf.dat <- bor.cstat.Ncoevo %>% 
-  bind_rows(bor.cstat.Pcoevo) %>% 
-  mutate_if(is.character, as.factor) 
-  
-model.ar <- lme(inf.prob ~ lim * phage.time, 
-                random = ~1 | cid.list,
-                correlation = corAR1(form = ~ 1 | cid.list),
-                data = inf.dat)
-
-#summary(model.ar)
-pander(anova.lme(model.ar, type = "marginal"), caption = "Infectivity RMANOVA results")
 ```
 
 
@@ -447,22 +479,22 @@ pander(anova.lme(model.ar, type = "marginal"), caption = "Infectivity RMANOVA re
 # Figure 3: Co-evolutionary dynamics
 
 ```{r con+coevo-dataImport}
-Ncon <- read.csv("./data/20150710-infmatrixNcontrols.csv", header = F)
+Ncon <- read.csv("../data/20150710-infmatrixNcontrols.csv", header = F)
 Ncon[1,1] <- 999
 Ncon[,1] <- as.numeric(as.character(Ncon[,1]))
 Ncon <- as.matrix(Ncon)
 
-Ntrt <- read.csv("./data/20150710-infmatrixNcoevo.csv", header = F)
+Ntrt <- read.csv("../data/20150710-infmatrixNcoevo.csv", header = F)
 Ntrt[1,1] <- 999
 Ntrt[,1] <- as.numeric(as.character(Ntrt[,1]))
 Ntrt <- as.matrix(Ntrt)
 
-Pcon <- read.csv("./data/20150710-infmatrixPcontrols.csv", header = F)
+Pcon <- read.csv("../data/20150710-infmatrixPcontrols.csv", header = F)
 Pcon[1,1] <- 999
 Pcon[,1] <- as.numeric(as.character(Pcon[,1]))
 Pcon <- as.matrix(Pcon)
 
-Ptrt <- read.csv("./data/20150710-infmatrixPcoevo.csv", header = F)
+Ptrt <- read.csv("../data/20150710-infmatrixPcoevo.csv", header = F)
 Ptrt[1,1] <- 999
 Ptrt[,1] <- as.numeric(as.character(Ptrt[,1]))
 Ptrt <- as.matrix(Ptrt)
@@ -490,9 +522,13 @@ Ptrt <- Ptrt[2:dim(Ptrt)[[1]], 2:(dim(Ptrt))[[2]]]
 ```
 
 ```{r figure}
-# tiff(filename = "./supporting-files/Figure3-CoEvoDynamics.tiff",
-#     width = 1140, height = 570, units = "px", pointsize = 13,
-#     bg = "white", res = 100)
+tiff(filename = "../supporting-files/Figure3-CoEvoDynamics.tiff",
+    width = 7.5, height =3.5, units = "in", pointsize = 8,
+    bg = "white", res = 600)
+
+# pdf(filename = "../supporting-files/Figure3-CoEvoDynamics.pdf",
+#     width = 2000, height =500, units = "px", pointsize = 8,
+#     bg = "white", res = 600)
 
 par(mfrow = c(1,2))
 par(mar = c(4,6,3,1)+0.1)
@@ -533,13 +569,13 @@ plot(g2,
      vertex.color = c(rep(phage.color,length(phage.time)),
                       rep(bac.color,length(bacteria.time)/2),
                       rep(bac.color2,length(bacteria.time)/2)),
-     vertex.frame.color = c(rep("black",length(phage.time)),
+     vertex.frame.color = c(rep("white",length(phage.time)),
                             rep("black",length(bacteria.time)/2),
                             rep("black",length(bacteria.time)/2)),
-     edge.color = "grey20",edge.width = 5*wts,
+     edge.color = "black",edge.width = 4.5*wts,
      edge.arrow.mode = 0,layout = locs,
      main = "N-limited",
-     xlab = list("Time (d)", cex = 1.25, font = 2),asp = 0, ylim = c(-1.2,1))
+     xlab = list("Time (days)", cex = 1.25, font = 2),asp = 0, ylim = c(-1.2,1))
 
 # draw scaled axes
 xs <- c(0,40,80, 120, 160)
@@ -589,13 +625,13 @@ plot(g2,
      vertex.color = c(rep(phage.color,length(phage.time)),
                       rep(bac.color,length(bacteria.time)/2),
                       rep(bac.color2,length(bacteria.time)/2)),
-     vertex.frame.color = c(rep("black",length(phage.time)),
+     vertex.frame.color = c(rep("white",length(phage.time)),
                             rep("black",length(bacteria.time)/2),
                             rep("black",length(bacteria.time)/2)),
-     edge.color = "grey20",edge.width = 5*wts,
+     edge.color = "black",edge.width = 4.5*wts,
      edge.arrow.mode = 0,layout = locs,
      main = "P-limited",
-     xlab = list("Time (d)", cex = 1.25, font = 2),
+     xlab = list("Time (days)", cex = 1.25, font = 2),
      asp = 0,ylim = c(-1.2,1))
 
 # draw scaled axes
@@ -607,7 +643,7 @@ axis(4, at = c(-1,0,1),labels = c("host \n(+ phage)","phage","host \n(- phage)")
 
 box(lwd = 2)
 
-#dev.off()
+dev.off()
 ```
 
 
@@ -746,8 +782,8 @@ p$data$trt <- factor(p$data$trt, levels=c("T","C"))
 
 print(p)
 
-# ggsave("./supporting-files/Figure4-time_shift.tiff", p, device = "tiff",
-#       scale = 1.5, width = 6, height = 4, units = "in", dpi = 300)
+ggsave("../supporting-files/Figure4-time_shift.pdf", p, device = "pdf",
+      scale = 1.5, width = 6, height = 4, units = "in", dpi = 600)
 
 ```
 
